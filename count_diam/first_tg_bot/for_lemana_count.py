@@ -9,7 +9,3 @@ def count_diam(d_rull: float, col_vo_vit: float, chirina: float):
     f4 = round(f3 * chirina, 2)
     return f3, f4
     
-d1_rull = float(input('Enter diametr: '))
-col1_vo_vit = float(input('Enter colvo vitkov: '))
-chir = float(input('Enter chirina: '))
-count_diam(d_rull=d1_rull, col_vo_vit=col1_vo_vit, chirina=chir)
