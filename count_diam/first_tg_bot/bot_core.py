@@ -15,6 +15,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
+logger = logging.getLogger(__name__)
 
 # Состояния диалога
 DIAMETER, VITKI, WIDTH = range(3)
@@ -31,9 +32,9 @@ class MaterialCalculatorBot:
         conv_handler = ConversationHandler(
             entry_points=[CommandHandler('start', self.start)],
             states={
-                DIAMETER: [MessageHandler(Filters.text & ~Filters.command, self.get_diameter)],
-                VITKI: [MessageHandler(Filters.text & ~Filters.command, self.get_vitki)],
-                WIDTH: [MessageHandler(Filters.text & ~Filters.command, self.get_width)]
+                DIAMETER: [MessageHandler(filters.Filters.text & ~filters.Filters.command, self.get_diameter)],
+                VITKI: [MessageHandler(filters.Filters.text & ~filters.Filters.command, self.get_vitki)],
+                WIDTH: [MessageHandler(filters.Filters.text & ~filters.Filters.command, self.get_width)]
             },
             fallbacks=[CommandHandler('cancel', self.cancel)],
             allow_reentry=True
@@ -42,7 +43,7 @@ class MaterialCalculatorBot:
         self.dp.add_handler(conv_handler)
         self.dp.add_error_handler(self.error_handler)
     
-    def start(self, update: Update, context: CallbackContext):
+    def start(self, update: Update, context: CallbackContext) -> int:
         user_id = update.message.from_user.id
         self.user_data[user_id] = {}
         update.message.reply_text(
@@ -51,9 +52,9 @@ class MaterialCalculatorBot:
         )
         return DIAMETER
     
-    def get_diameter(self, update: Update, context: CallbackContext):
+    def get_diameter(self, update: Update, context: CallbackContext) -> int:
         try:
-            diameter = float(update.message.text)
+            diameter = float(update.message.text.replace(',', '.'))
             if diameter <= 0:
                 update.message.reply_text("❌ Диаметр должен быть > 0")
                 return DIAMETER
@@ -65,9 +66,9 @@ class MaterialCalculatorBot:
             update.message.reply_text("❌ Введите число (например: 1.5)")
             return DIAMETER
     
-    def get_vitki(self, update: Update, context: CallbackContext):
+    def get_vitki(self, update: Update, context: CallbackContext) -> int:
         try:
-            vitki = float(update.message.text)
+            vitki = float(update.message.text.replace(',', '.'))
             if vitki <= 0:
                 update.message.reply_text("❌ Количество должно быть > 0")
                 return VITKI
@@ -79,15 +80,19 @@ class MaterialCalculatorBot:
             update.message.reply_text("❌ Введите число (например: 10)")
             return VITKI
     
-    def get_width(self, update: Update, context: CallbackContext):
+    def get_width(self, update: Update, context: CallbackContext) -> int:
         try:
-            width = float(update.message.text)
+            width = float(update.message.text.replace(',', '.'))
             if width <= 0:
                 update.message.reply_text("❌ Ширина должна быть > 0")
                 return WIDTH
             
             user_id = update.message.from_user.id
-            data = self.user_data[user_id]
+            data = self.user_data.get(user_id, {})
+            if not data:
+                update.message.reply_text("❌ Данные не найдены. Начните заново: /start")
+                return ConversationHandler.END
+                
             pogony, kv_metri = count_diam(data['diameter'], data['vitki'], width)
             
             update.message.reply_text(
@@ -100,23 +105,33 @@ class MaterialCalculatorBot:
         except ValueError:
             update.message.reply_text("❌ Введите число (например: 0.5)")
             return WIDTH
+        except Exception as e:
+            logger.error(f"Error in get_width: {e}")
+            update.message.reply_text("❌ Произошла ошибка при расчетах")
+            return ConversationHandler.END
     
-    def cancel(self, update: Update, context: CallbackContext):
+    def cancel(self, update: Update, context: CallbackContext) -> int:
         update.message.reply_text("❌ Диалог отменён. /start - начать заново")
         return ConversationHandler.END
     
-    def error_handler(self, update: Update, context: CallbackContext):
+    def error_handler(self, update: object, context: CallbackContext) -> None:
         error = context.error
-        logging.error(f"Ошибка: {error}", exc_info=True)
+        logger.error(f"Ошибка: {error}", exc_info=True)
         
-        if update and update.message:
+        if update and hasattr(update, 'message'):
             update.message.reply_text(
                 "⚠️ Техническая ошибка\n"
                 "Попробуйте снова: /start\n"
                 f"Код ошибки: {type(error).__name__}"
             )
     
-    def run(self):
+    def run(self) -> None:
         self.updater.start_polling()
         self.updater.idle()
-        
+
+
+# Для запуска бота
+if __name__ == '__main__':
+    TOKEN = "7771023581:AAFMu7180GflNAIoT4zyr3ApPRHoKEqCLSM"
+    bot = MaterialCalculatorBot(TOKEN)
+    bot.run()
